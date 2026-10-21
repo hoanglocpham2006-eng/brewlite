@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  fullName     String   @db.VarChar(100)
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @db.VarChar(255)
+  phone        String?  @db.VarChar(20)
+  role         UserRole @default(CUSTOMER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  carts        carts?
+  orders       orders[]
+
+  @@map("users")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model cart_items {
+  id         Int      @id @default(autoincrement())
+  cart_id    Int
+  product_id Int
+  quantity   Int      @default(1)
+  size       String   @default("M") @db.VarChar(20)
+  unit_price Decimal  @db.Decimal(12, 2)
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @default(now()) @db.Timestamp(6)
+  toppings Json @default("[]") @db.JsonB
+  carts      carts    @relation(fields: [cart_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cart_items_cart")
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cart_items_product")
+
+  }
+
+model carts {
+  id         Int          @id @default(autoincrement())
+  user_id    Int          @unique
+  created_at DateTime     @default(now()) @db.Timestamp(6)
+  updated_at DateTime     @default(now()) @db.Timestamp(6)
+  cart_items cart_items[]
+  users      User         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_carts_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model order_items {
+  id           Int      @id @default(autoincrement())
+  order_id     Int
+  product_id   Int
+  product_name String   @db.VarChar(150)
+  quantity     Int
+  size         String   @default("M") @db.VarChar(20)
+  unit_price   Decimal  @db.Decimal(12, 2)
+  subtotal     Decimal  @db.Decimal(12, 2)
+  orders       orders   @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_order_items_order")
+  products     products @relation(fields: [product_id], references: [id], onUpdate: NoAction, map: "fk_order_items_product")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model orders {
+  id               Int           @id @default(autoincrement())
+  user_id          Int
+  total_amount     Decimal       @default(0) @db.Decimal(12, 2)
+  status           String        @default("PENDING") @db.VarChar(30)
+  recipient_name   String        @db.VarChar(100)
+  recipient_phone  String        @db.VarChar(20)
+  delivery_address String
+  note             String?
+  payment_method   String        @default("COD") @db.VarChar(30)
+  created_at       DateTime      @default(now()) @db.Timestamp(6)
+  updated_at       DateTime      @default(now()) @db.Timestamp(6)
+  order_items      order_items[]
+  users            User          @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "fk_orders_user")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model products {
+  id           Int           @id @default(autoincrement())
+  name         String        @db.VarChar(150)
+  description  String?
+  price        Decimal       @db.Decimal(12, 2)
+  image_url    String?       @db.VarChar(500)
+  category     String?       @db.VarChar(100)
+  is_available Boolean       @default(true)
+  created_at   DateTime      @default(now()) @db.Timestamp(6)
+  updated_at   DateTime      @default(now()) @db.Timestamp(6)
+  cart_items   cart_items[]
+  order_items  order_items[]
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+}
