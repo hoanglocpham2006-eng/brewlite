@@ -240,4 +240,41 @@ export class OrdersService {
       };
     });
   }
+  async getMyOrders(userId: number) {
+    const orders = await this.prisma.orders.findMany({
+      where: {
+        user_id: userId,
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+      include: {
+        order_items: true,
+      },
+    });
+
+    return {
+      orders: orders.map((order) => ({
+        id: order.id,
+        totalAmount: Number(order.total_amount),
+        status: order.status,
+        recipientName: order.recipient_name,
+        recipientPhone: order.recipient_phone,
+        deliveryAddress: order.delivery_address,
+        note: order.note,
+        paymentMethod: order.payment_method,
+        createdAt: order.created_at,
+        items: order.order_items.map((item) => ({
+          id: item.id,
+          productId: item.product_id,
+          productName: item.product_name,
+          quantity: item.quantity,
+          size: item.size,
+          unitPrice: Number(item.unit_price),
+          subtotal: Number(item.subtotal),
+          toppings: item.toppings,
+        })),
+      })),
+    };
+  }
 }
