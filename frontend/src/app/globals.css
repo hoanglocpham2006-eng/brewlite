@@ -1,4 +1,3 @@
-
 @import "tailwindcss";
 
 :root {
@@ -145,6 +144,146 @@ input {
 .primary-button:hover {
   background: var(--coffee-dark);
   transform: translateY(-2px);
+}
+
+.header-register {
+  padding: 10px 8px;
+  color: var(--coffee);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.header-register:hover {
+  color: var(--coffee-dark);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.header-slot {
+  display: inline-block;
+  width: 120px;
+  height: 42px;
+}
+
+.account-menu {
+  position: relative;
+}
+
+.account-trigger {
+  height: 42px;
+  padding: 0 12px 0 5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--coffee);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.account-trigger:hover,
+.account-trigger[aria-expanded="true"] {
+  background: var(--cream);
+}
+
+.account-avatar {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--coffee);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.account-name {
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-chevron {
+  transition: transform 0.2s;
+}
+
+.account-trigger[aria-expanded="true"] .account-chevron {
+  transform: rotate(180deg);
+}
+
+.account-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 20;
+  min-width: 230px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(76, 45, 32, 0.14);
+}
+
+.account-summary {
+  margin-bottom: 6px;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-summary strong {
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.account-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.account-dropdown a,
+.account-dropdown button {
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-dropdown a:hover,
+.account-dropdown button:hover {
+  background: var(--cream);
+}
+
+.account-dropdown .account-logout {
+  color: #a3402a;
+}
+
+.account-trigger:focus-visible,
+.account-dropdown a:focus-visible,
+.account-dropdown button:focus-visible,
+.header-register:focus-visible,
+.header-login:focus-visible {
+  outline: 2px solid var(--coffee);
+  outline-offset: 2px;
 }
 
 .hero {
@@ -450,7 +589,7 @@ input {
     gap: 15px;
   }
 
-  .header-login {
+  .header-register {
     display: none;
   }
 
@@ -496,6 +635,24 @@ input {
   .icon-link {
     width: 38px;
     height: 38px;
+  }
+
+  .header-login {
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .account-name {
+    display: none;
+  }
+
+  .account-trigger {
+    padding: 0 10px 0 5px;
+    gap: 6px;
+  }
+
+  .header-slot {
+    width: 80px;
   }
 
   .hero {

@@ -65,11 +65,11 @@
 │  Frontend          │ ─────────────► │  Backend           │ ───────────► │  PostgreSQL      │
 │  Next.js :3000     │ ◄───────────── │  NestJS :3001      │ ◄─────────── │  :5432 (host 5433│
 │  (token trong      │                │  JWT + Validation  │              │   khi dùng Docker)│
-│   localStorage)    │                └────────────────────┘              └──────────────────┘
+│   sessionStorage)  │                └────────────────────┘              └──────────────────┘
 └────────────────────┘
 ```
 
-- **Frontend** gọi backend qua biến `NEXT_PUBLIC_API_URL` (mặc định `http://localhost:3001`). Token đăng nhập lưu trong `localStorage` với khóa `access_token`, thông tin người dùng với khóa `user`.
+- **Frontend** gọi backend qua biến `NEXT_PUBLIC_API_URL` (mặc định `http://localhost:3001`). Token đăng nhập lưu trong `sessionStorage` với khóa `access_token`, thông tin người dùng với khóa `user` (đóng tab là phải đăng nhập lại).
 - **Backend** chia theo module: `auth`, `products`, `cart`, `orders`, `payments`, `inventory`, `prisma`. Dữ liệu đầu vào được kiểm tra bằng `ValidationPipe` (`whitelist` và `forbidNonWhitelisted` bật).
 - **Database** gồm các nhóm bảng: người dùng và giỏ hàng (`users`, `carts`, `cart_items`), sản phẩm (`products`), đơn hàng (`orders`, `order_items`, `payments`), khuyến mãi và điểm thưởng (`promotion_codes`, `loyalty_transactions`), tồn kho nguyên liệu (`ingredients`, `product_recipes`, `topping_recipes`, `order_ingredient_reservations`).
 
@@ -95,6 +95,7 @@ brewlite/
 ├── frontend/                 # Giao diện Next.js
 │   ├── src/app/
 │   │   ├── page.tsx          # Trang chủ, danh sách món
+│   │   ├── components/       # SiteHeader: thanh điều hướng theo trạng thái đăng nhập
 │   │   ├── products/[id]/    # Chi tiết món
 │   │   ├── cart/             # Giỏ hàng
 │   │   ├── checkout/         # Đặt hàng và thanh toán

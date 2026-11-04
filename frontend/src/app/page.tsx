@@ -3,35 +3,13 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import SiteHeader from './components/SiteHeader';
 
 interface Product {
   id: number;
   name: string;
   price: number;
   imageUrl: string;
-}
-
-function UserIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
-      strokeLinejoin="round" aria-hidden="true">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21a8 8 0 0 1 16 0" />
-    </svg>
-  );
-}
-
-function CartIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"
-      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
-      strokeLinejoin="round" aria-hidden="true">
-      <circle cx="9" cy="21" r="1" />
-      <circle cx="19" cy="21" r="1" />
-      <path d="M2 3h2l3 13h12l3-10H5" />
-    </svg>
-  );
 }
 
 export default function Home() {
@@ -65,59 +43,7 @@ export default function Home() {
 
   return (
     <main className="brew-page">
-      <header className="site-header">
-        <div className="header-inner">
-          <Link href="/" className="brand">
-            <span className="brand-symbol">☕</span>
-            <span>Brew<span>Lite</span></span>
-          </Link>
-
-          <nav className="main-nav" aria-label="Điều hướng chính">
-            <Link href="/" className="nav-active">Trang chủ</Link>
-            <a href="#menu">Menu đồ uống</a>
-            <a href="#about">Về BrewLite</a>
-          </nav>
-
-          <div className="header-actions">
-            <Link href="/login" className="icon-link" aria-label="Tài khoản"
-              title="Đăng nhập">
-              <UserIcon />
-            </Link>
-
-            <Link
-                href="/orders"
-                title="Lịch sử đơn hàng"
-                aria-label="Xem lịch sử đơn hàng"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  padding: '10px 12px',
-                  border: '1px solid #e5d5c5',
-                  borderRadius: 10,
-                  background: '#fff',
-                  color: '#68472e',
-                  textDecoration: 'none',
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                <span aria-hidden="true">📋</span>
-                <span>Lịch sử</span>
-            </Link>
-
-            <Link href="/cart" className="icon-link" aria-label="Giỏ hàng"
-              title="Giỏ hàng">
-              <CartIcon />
-            </Link>
-
-            <Link href="/login" className="header-login">
-              Đăng nhập
-            </Link>
-          </div>
-        </div>
-      </header>
+      <SiteHeader />
 
       <section className="hero">
         <div className="hero-content">
