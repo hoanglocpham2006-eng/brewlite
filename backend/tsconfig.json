@@ -17,6 +17,9 @@
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
+    "rootDir": "./src",
     "strictPropertyInitialization": false
-  }
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "test", "dist", "coverage"]
 }

@@ -34,4 +34,10 @@ export class CreateOrderDto {
   @IsOptional()
   @IsIn(['COD', 'EWALLET', 'BANK_CARD'])
   paymentMethod?: string;
+
+  // Mã khuyến mãi khách hàng nhập
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  promotionCode?: string;
 }

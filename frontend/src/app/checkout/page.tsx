@@ -436,36 +436,52 @@ export default function CheckoutPage() {
         setOrder(result.order);
         setCart({ userId, items: [], total: 0 });
       } else {
-        const paymentResponse = await fetch(`${API_URL}/payments`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: result.order.id,
-            paymentMethod,
-            simulateFailure,
-          }),
-        });
-        const paymentData = await paymentResponse.json();
+  // Tạo khóa duy nhất cho yêu cầu thanh toán của đơn hàng.
+      const idempotencyKey =
+        `payment-${result.order.id}-${crypto.randomUUID()}`;
 
-        if (!paymentResponse.ok) {
-          throw new Error(
-            typeof paymentData.message === 'string'
-              ? paymentData.message
-              : 'Không thể xử lý thanh toán.',
-          );
-        }
+      const paymentResponse = await fetch(`${API_URL}/payments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          orderId: result.order.id,
+          paymentMethod,
+          idempotencyKey,
+          simulateFailure,
+        }),
+      });
 
-        if (!paymentData.success) {
-          setError(
-            paymentData.message ||
-              'Thanh toán thất bại. Giỏ hàng của bạn vẫn được giữ nguyên.',
-          );
-          return;
-        }
+      const paymentData = await paymentResponse.json();
 
-        setOrder({ ...result.order, status: paymentData.status || 'PAID' });
-        setCart({ userId, items: [], total: 0 });
+      if (!paymentResponse.ok) {
+        const message = Array.isArray(paymentData.message)
+          ? paymentData.message.join(', ')
+          : paymentData.message || 'Không thể xử lý thanh toán.';
+
+        throw new Error(message);
       }
+
+      if (!paymentData.success) {
+        setError(
+          paymentData.message ||
+            'Thanh toán thất bại. Giỏ hàng của bạn vẫn được giữ nguyên.',
+        );
+        return;
+      }
+
+      setOrder({
+        ...result.order,
+        status: paymentData.status || 'PAID',
+      });
+
+      setCart({
+        userId,
+        items: [],
+        total: 0,
+      });
+    }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
