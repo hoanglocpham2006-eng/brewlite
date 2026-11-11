@@ -336,7 +336,6 @@ export default function CheckoutPage() {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [note, setNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'EWALLET' | 'BANK_CARD'>('COD');
-  const [simulateFailure, setSimulateFailure] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -436,52 +435,11 @@ export default function CheckoutPage() {
         setOrder(result.order);
         setCart({ userId, items: [], total: 0 });
       } else {
-  // Tạo khóa duy nhất cho yêu cầu thanh toán của đơn hàng.
-      const idempotencyKey =
-        `payment-${result.order.id}-${crypto.randomUUID()}`;
-
-      const paymentResponse = await fetch(`${API_URL}/payments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          orderId: result.order.id,
-          paymentMethod,
-          idempotencyKey,
-          simulateFailure,
-        }),
-      });
-
-      const paymentData = await paymentResponse.json();
-
-      if (!paymentResponse.ok) {
-        const message = Array.isArray(paymentData.message)
-          ? paymentData.message.join(', ')
-          : paymentData.message || 'Không thể xử lý thanh toán.';
-
-        throw new Error(message);
+        // Đơn đã tạo ở trạng thái PENDING: chuyển sang trang thanh toán,
+        // nơi phiên thanh toán được mở kèm token đăng nhập.
+        setCart({ userId, items: [], total: 0 });
+        router.push(`/pay/${result.order.id}`);
       }
-
-      if (!paymentData.success) {
-        setError(
-          paymentData.message ||
-            'Thanh toán thất bại. Giỏ hàng của bạn vẫn được giữ nguyên.',
-        );
-        return;
-      }
-
-      setOrder({
-        ...result.order,
-        status: paymentData.status || 'PAID',
-      });
-
-      setCart({
-        userId,
-        items: [],
-        total: 0,
-      });
-    }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -683,17 +641,6 @@ export default function CheckoutPage() {
                   </label>
                 ))}
 
-                {paymentMethod !== 'COD' && (
-                  <label style={{ display: 'flex', gap: '9px', alignItems: 'flex-start', marginTop: '8px', fontSize: '12px', color: colors.muted }}>
-                    <input
-                      type="checkbox"
-                      checked={simulateFailure}
-                      onChange={(event) => setSimulateFailure(event.target.checked)}
-                      style={{ marginTop: '2px', accentColor: colors.brown }}
-                    />
-                    Mô phỏng thanh toán thất bại (dùng để kiểm thử Task 8)
-                  </label>
-                )}
               </div>
 
               <button

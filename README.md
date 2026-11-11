@@ -29,6 +29,9 @@
   - [9. Cập nhật database và build lại container](#9-cập-nhật-database-và-build-lại-container)
   - [10. Các API chính](#10-các-api-chính)
   - [11. Quy trình đặt hàng và thanh toán](#11-quy-trình-đặt-hàng-và-thanh-toán)
+    - [11.1. Máy trạng thái đơn hàng](#111-máy-trạng-thái-đơn-hàng)
+    - [11.2. Các bước của một giao dịch](#112-các-bước-của-một-giao-dịch)
+    - [11.3. Quy tắc của cổng thanh toán mô phỏng](#113-quy-tắc-của-cổng-thanh-toán-mô-phỏng)
   - [12. Kiểm thử](#12-kiểm-thử)
   - [13. Hạn chế đã biết](#13-hạn-chế-đã-biết)
 
@@ -42,9 +45,11 @@
 - Giỏ hàng lưu trong database theo từng người dùng.
 - Kiểm tra số ly tối đa có thể đặt dựa trên tồn kho nguyên liệu.
 - Mã khuyến mãi (giảm theo phần trăm hoặc số tiền cố định, có đơn tối thiểu và thời hạn).
-- Đặt hàng với 3 phương thức: `COD`, `EWALLET`, `BANK_CARD`.
-- Thanh toán điện tử **mô phỏng** (có tùy chọn giả lập thanh toán thất bại), chống gửi trùng bằng `idempotencyKey`.
-- Tích điểm khách hàng sau khi thanh toán thành công (10.000đ = 1 điểm).
+- Đặt hàng với 3 phương thức: `COD`, `EWALLET` (ví BrewPay), `BANK_CARD` (thẻ ngân hàng).
+- **Cổng thanh toán mô phỏng (BrewPay Sandbox)** với đầy đủ các bước như giao dịch thật: phiên thanh toán có thời hạn, ví có số dư và mã PIN, thẻ có kiểm tra Luhn, hạn thẻ, CVV và xác thực OTP (3-D Secure), giới hạn số lần nhập sai, hoàn tiền khi hủy đơn. Không có tiền thật nào được chuyển.
+- Mọi bước thanh toán đều đi theo đúng máy trạng thái đơn hàng ở [mục 11](#11-quy-trình-đặt-hàng-và-thanh-toán).
+- Tích điểm khách hàng sau khi thanh toán thành công (10.000đ = 1 điểm), thu hồi điểm nếu đơn bị hủy và hoàn tiền.
+- Hủy đơn (khi chưa vào khâu pha chế), tự hoàn tiền và hoàn nguyên liệu nếu đơn đã thanh toán.
 - Xem lịch sử đơn hàng của chính mình.
 
 ## 2. Công nghệ sử dụng
@@ -70,8 +75,8 @@
 ```
 
 - **Frontend** gọi backend qua biến `NEXT_PUBLIC_API_URL` (mặc định `http://localhost:3001`). Token đăng nhập lưu trong `sessionStorage` với khóa `access_token`, thông tin người dùng với khóa `user` (đóng tab là phải đăng nhập lại).
-- **Backend** chia theo module: `auth`, `products`, `cart`, `orders`, `payments`, `inventory`, `prisma`. Dữ liệu đầu vào được kiểm tra bằng `ValidationPipe` (`whitelist` và `forbidNonWhitelisted` bật).
-- **Database** gồm các nhóm bảng: người dùng và giỏ hàng (`users`, `carts`, `cart_items`), sản phẩm (`products`), đơn hàng (`orders`, `order_items`, `payments`), khuyến mãi và điểm thưởng (`promotion_codes`, `loyalty_transactions`), tồn kho nguyên liệu (`ingredients`, `product_recipes`, `topping_recipes`, `order_ingredient_reservations`).
+- **Backend** chia theo module: `auth`, `products`, `cart`, `orders`, `payments`, `inventory`, `wallet` (nằm trong module payments), `prisma`. Dữ liệu đầu vào được kiểm tra bằng `ValidationPipe` (`whitelist` và `forbidNonWhitelisted` bật).
+- **Database** gồm các nhóm bảng: người dùng và giỏ hàng (`users`, `carts`, `cart_items`), sản phẩm (`products`), đơn hàng (`orders`, `order_items`, `payments`), khuyến mãi và điểm thưởng (`promotion_codes`, `loyalty_transactions`), tồn kho nguyên liệu (`ingredients`, `product_recipes`, `topping_recipes`, `order_ingredient_reservations`), ví mô phỏng (`sim_wallets`, `wallet_transactions`).
 
 ## 4. Cấu trúc thư mục
 
@@ -87,7 +92,13 @@ brewlite/
 │   │   ├── cart/             # Giỏ hàng
 │   │   ├── inventory/        # Kiểm tra số ly tối đa theo nguyên liệu
 │   │   ├── orders/           # Tạo đơn, lịch sử đơn, máy trạng thái đơn
-│   │   ├── payments/         # Thanh toán mô phỏng, idempotency, tích điểm
+│   │   ├── payments/         # Cổng thanh toán mô phỏng
+│   │   │   ├── payments.service.ts   # Phiên thanh toán, chuyển trạng thái đơn, hủy và hoàn tiền
+│   │   │   ├── wallet.service.ts     # Ví BrewPay: kích hoạt, nạp tiền
+│   │   │   ├── card-gateway.ts       # Luhn, hạn thẻ, bộ thẻ thử nghiệm
+│   │   │   ├── otp.ts                # OTP mô phỏng
+│   │   │   └── payment.constants.ts  # Thời hạn phiên, số lần thử, hạn mức
+│   │   ├── testing/          # Database giả trong bộ nhớ dùng cho test
 │   │   └── prisma/           # PrismaService
 │   ├── test/                 # Test e2e
 │   ├── Dockerfile
@@ -98,7 +109,8 @@ brewlite/
 │   │   ├── components/       # SiteHeader: thanh điều hướng theo trạng thái đăng nhập
 │   │   ├── products/[id]/    # Chi tiết món
 │   │   ├── cart/             # Giỏ hàng
-│   │   ├── checkout/         # Đặt hàng và thanh toán
+│   │   ├── checkout/         # Nhập thông tin nhận hàng và đặt hàng
+│   │   ├── pay/[orderId]/    # Trang thanh toán: ví, thẻ, OTP, kết quả, thử lại
 │   │   ├── orders/           # Lịch sử đơn hàng
 │   │   ├── login/            # Đăng nhập
 │   │   └── register/         # Đăng ký
@@ -330,6 +342,21 @@ docker compose up -d --build backend
 docker compose exec backend npx prisma db push
 ```
 
+**Nâng cấp lên cổng thanh toán mô phỏng (một lần):** bảng `payments` bỏ cột `simulate_failure` và thêm nhiều cột mới, đồng thời có thêm hai bảng `sim_wallets` và `wallet_transactions`. Vì có xóa một cột nên Prisma sẽ cảnh báo mất dữ liệu cột đó, hãy chạy kèm cờ xác nhận:
+
+```powershell
+# Chạy trực tiếp
+cd backend
+npx prisma db push --accept-data-loss
+npx prisma generate
+
+# Docker
+docker compose up -d --build backend
+docker compose exec backend npx prisma db push --accept-data-loss
+```
+
+Các giao dịch cũ trong bảng `payments` được giữ lại. Những dòng cũ có trạng thái `PROCESSING` không còn được hệ thống sử dụng.
+
 **Sau khi sửa mã nguồn (Docker):**
 
 ```powershell
@@ -368,17 +395,25 @@ docker cp brewlite-db:/tmp/brewlite_db.backup ./backups/brewlite_db.backup
 | POST | `/cart/items` | Thêm món (`userId`, `productId`, `size`, `toppings`) | Không |
 | PATCH | `/cart/items/:id` | Đổi số lượng (`userId`, `quantity`) | Không |
 | DELETE | `/cart/items/:id?userId=` | Xóa món khỏi giỏ | Không |
-| POST | `/orders` | Tạo đơn từ giỏ hàng | Không |
-| GET | `/orders/me` | Lịch sử đơn của người dùng đăng nhập | **Có** (`Authorization: Bearer <token>`) |
-| POST | `/payments` | Thanh toán đơn bằng `EWALLET` hoặc `BANK_CARD` | Không |
+| POST | `/orders` | Tạo đơn từ giỏ hàng (trạng thái `PENDING`) | Không |
+| GET | `/orders/me` | Lịch sử đơn của người dùng đăng nhập | **Có** |
+| POST | `/orders/:id/cancel` | Hủy đơn (`PENDING`, `PAYMENT_FAILED` hoặc `PAID`). Đơn đã thanh toán được hoàn tiền | **Có** |
+| GET | `/wallet` | Số dư ví BrewPay và 10 giao dịch gần nhất | **Có** |
+| POST | `/wallet` | Kích hoạt ví với mã PIN 6 số (`{ "pin": "123456" }`), số dư ban đầu 0đ | **Có** |
+| POST | `/wallet/topup` | Nạp tiền thử nghiệm (`{ "amount": 100000 }`, từ 10.000đ đến 2.000.000đ mỗi lần, số dư tối đa 10.000.000đ) | **Có** |
+| GET | `/payments/test-cards` | Danh sách thẻ thử nghiệm | **Có** |
+| POST | `/payments` | Tạo phiên thanh toán cho đơn `PENDING` hoặc `PAYMENT_FAILED` | **Có** |
+| GET | `/payments/:id` | Xem phiên thanh toán (tự đóng phiên nếu đã hết hạn) | **Có** |
+| POST | `/payments/:id/confirm` | Ví: `{ "pin" }`. Thẻ: `{ "cardNumber", "cardHolder", "expiry", "cvv" }` | **Có** |
+| POST | `/payments/:id/otp` | Thẻ 3-D Secure: nhập mã OTP (`{ "otp": "123456" }`) | **Có** |
+| POST | `/payments/:id/cancel` | Khách hủy thanh toán | **Có** |
 
-Ví dụ đăng nhập:
+Các API có JWT gửi kèm header `Authorization: Bearer <token>` và chỉ thao tác được trên dữ liệu của chính người dùng đó.
 
-```powershell
-curl -X POST http://localhost:3001/auth/login `
-  -H "Content-Type: application/json" `
-  -d '{"email":"ban@example.com","password":"matkhau123"}'
-```
+**Cách phản hồi lỗi của bước xác nhận:**
+
+- Lỗi nhập liệu có thể sửa được (sai PIN, sai OTP, số thẻ sai Luhn, CVV sai…) trả **HTTP 400** kèm `code` và `attemptsLeft` (số lần thử còn lại). Phiên vẫn mở để khách nhập lại.
+- Giao dịch kết thúc (bị từ chối, không đủ số dư, hết số lần thử, hết hạn) trả **HTTP 200** với `status` là `FAILED`, `EXPIRED` hoặc `CANCELLED`, kèm `failure.code` và `failure.message`.
 
 Ví dụ tạo đơn:
 
@@ -394,16 +429,16 @@ Ví dụ tạo đơn:
 }
 ```
 
-Ví dụ thanh toán:
+Ví dụ tạo phiên thanh toán (`paymentMethod` có thể bỏ qua, mặc định dùng phương thức của đơn):
 
 ```json
 {
   "orderId": 1,
-  "paymentMethod": "EWALLET",
-  "simulateFailure": false,
   "idempotencyKey": "chuoi-duy-nhat-cho-moi-lan-thanh-toan"
 }
 ```
+
+Gửi lại cùng `idempotencyKey` sẽ nhận lại đúng phiên cũ thay vì tạo phiên mới. Khóa dùng cho đơn khác bị từ chối.
 
 **Bảng giá cộng thêm:**
 
@@ -417,15 +452,9 @@ Ví dụ thanh toán:
 
 ## 11. Quy trình đặt hàng và thanh toán
 
-1. Người dùng thêm món vào giỏ (size, topping, số lượng).
-2. `POST /orders` chạy trong **một transaction**: kiểm tra giỏ, tính giá, áp mã khuyến mãi, cộng dồn nhu cầu nguyên liệu của cả đơn, **giữ nguyên liệu** (`RESERVED`) bằng khóa lạc quan (cột `version`) rồi tạo đơn ở trạng thái `PENDING`. Nếu bất kỳ bước nào lỗi, toàn bộ được hoàn tác.
-3. Với `COD`, giỏ hàng bị xóa ngay. Với thanh toán điện tử, giỏ được giữ đến khi thanh toán thành công.
-4. `POST /payments` (chỉ cho đơn `PENDING` hoặc `PAYMENT_FAILED`):
-   - Thành công: đơn chuyển `PAID`, nguyên liệu chuyển `CONSUMED`, cộng điểm thưởng.
-   - Thất bại (`simulateFailure: true`): đơn chuyển `PAYMENT_FAILED`, nguyên liệu được nhả lại (`RELEASED`). Có thể thanh toán lại, hệ thống sẽ giữ nguyên liệu lần nữa.
-   - Gửi lại cùng `idempotencyKey` với cùng nội dung sẽ trả kết quả cũ, không xử lý hai lần.
+### 11.1. Máy trạng thái đơn hàng
 
-**Máy trạng thái đơn hàng:**
+Mọi thao tác thanh toán, thất bại, thử lại và hủy đều chỉ đi theo các đường dưới đây. Mỗi lần đổi trạng thái đều đi qua `assertTransition` trong `order-state-machine.ts` và được cập nhật có điều kiện (nếu trạng thái vừa bị thay đổi bởi yêu cầu khác thì bị từ chối), nên không thể nhảy cóc.
 
 ```
 PENDING ──► PAID ──► PREPARING ──► READY ──► COMPLETED
@@ -436,7 +465,57 @@ PENDING ──► PAID ──► PREPARING ──► READY ──► COMPLETED
    └──► CANCELLED
 ```
 
-Các bước `PREPARING`, `READY`, `COMPLETED` đã được định nghĩa trong `order-state-machine.ts` nhưng chưa có API để chuyển trạng thái.
+| Sự kiện | Trạng thái đơn |
+| --- | --- |
+| Tạo đơn (giữ nguyên liệu) | `PENDING` |
+| Tạo phiên thanh toán cho đơn `PAYMENT_FAILED` (thử lại) | `PAYMENT_FAILED` → `PENDING`, giữ lại nguyên liệu |
+| Thanh toán thành công (PIN đúng và đủ tiền, thẻ được duyệt, hoặc OTP đúng) | `PENDING` → `PAID` |
+| Thất bại: thẻ bị từ chối, không đủ số dư, nhập sai quá 3 lần, OTP hết hạn, phiên hết hạn, khách hủy thanh toán | `PENDING` → `PAYMENT_FAILED`, hoàn nguyên liệu |
+| Hủy đơn khi chưa thanh toán | `PENDING` hoặc `PAYMENT_FAILED` → `CANCELLED` |
+| Hủy đơn đã thanh toán (chưa pha chế) | `PAID` → `CANCELLED`, hoàn tiền, hoàn nguyên liệu, thu hồi điểm |
+
+Các bước `PREPARING`, `READY`, `COMPLETED` đã được định nghĩa trong máy trạng thái nhưng chưa có API để chuyển.
+
+### 11.2. Các bước của một giao dịch
+
+1. **Đặt hàng:** `POST /orders` chạy trong một transaction: kiểm tra giỏ, tính giá, áp mã khuyến mãi, **giữ nguyên liệu** bằng khóa lạc quan (cột `version`) rồi tạo đơn `PENDING`. Với `COD`, giỏ bị xóa ngay; với thanh toán trực tuyến, giao diện chuyển sang trang `/pay/<mã đơn>` và giỏ được giữ cho đến khi thanh toán thành công.
+2. **Mở phiên:** `POST /payments` tạo phiên ở trạng thái `AWAITING_PAYMENT` với mã giao dịch `BLP...` và thời hạn **5 phút**.
+3. **Xác nhận** (`POST /payments/:id/confirm`):
+   - **Ví BrewPay:** nhập PIN 6 số. Trừ tiền có điều kiện (chỉ trừ khi số dư đủ) và ghi sổ giao dịch ví.
+   - **Thẻ:** nhập số thẻ, tên chủ thẻ, hạn thẻ, CVV. Hệ thống kiểm tra Luhn, định dạng, hạn thẻ rồi quyết định theo bộ thẻ thử nghiệm.
+4. **OTP (chỉ thẻ 3-D Secure):** phiên chuyển sang `AWAITING_OTP`. Mã OTP 6 số có hiệu lực **3 phút** và được hiển thị trên giao diện như một tin nhắn SMS mô phỏng. Nhập đúng OTP thì đơn mới sang `PAID`.
+5. **Kết thúc:** phiên thành `SUCCESS`, `FAILED`, `EXPIRED` hoặc `CANCELLED`. Khi thất bại, giỏ hàng vẫn được giữ, nguyên liệu được hoàn về kho, khách có thể **thử lại** (đơn `PAYMENT_FAILED` → `PENDING`, giữ lại nguyên liệu) hoặc **hủy đơn**.
+6. **Hoàn tiền:** hủy đơn đã `PAID` sẽ cộng lại tiền vào ví (hoặc ghi nhận hoàn về thẻ), phiên thanh toán chuyển `REFUNDED`.
+
+Một tác vụ nền chạy mỗi 30 giây để đóng các phiên đã quá hạn, tránh giữ nguyên liệu mãi mãi.
+
+### 11.3. Quy tắc của cổng thanh toán mô phỏng
+
+| Quy tắc | Giá trị |
+| --- | --- |
+| Thời hạn phiên thanh toán | 5 phút |
+| Thời hạn OTP | 3 phút |
+| Số lần nhập sai tối đa mỗi bước | 3 |
+| Sai PIN ví 3 lần | Giao dịch thất bại, ví bị khóa 5 phút |
+| Số dư ví tối đa | 10.000.000đ |
+| Số tiền nạp mỗi lần | 10.000đ đến 2.000.000đ |
+| Lưu trữ thẻ | Chỉ lưu thương hiệu và 4 số cuối, **không** lưu số thẻ đầy đủ hay CVV |
+
+**Thẻ thử nghiệm** (hạn thẻ nhập bất kỳ ngày nào trong tương lai, ví dụ `12/30`, tên chủ thẻ bất kỳ, CVV 3 số bất kỳ):
+
+| Số thẻ | Kết quả |
+| --- | --- |
+| `4242 4242 4242 4242` (Visa) | Thành công ngay |
+| `5555 5555 5555 4444` (Mastercard) | Thành công sau khi nhập OTP |
+| `9704 0000 0000 0018` (thẻ nội địa) | Thành công sau khi nhập OTP |
+| `4000 0000 0000 0002` | Bị từ chối (`CARD_DECLINED`) |
+| `4000 0000 0000 9995` | Không đủ số dư (`INSUFFICIENT_FUNDS`) |
+| `4000 0000 0000 0069` | Thẻ hết hạn (`EXPIRED_CARD`) |
+| `4000 0000 0000 0127` | Thẻ bị khóa (`CARD_BLOCKED`) |
+
+Số thẻ hợp lệ Luhn nhưng không nằm trong danh sách trên bị báo `UNKNOWN_CARD` (được nhập lại, tính vào 3 lần thử). Trên trang thanh toán có mục **Thẻ thử nghiệm** để điền nhanh.
+
+**Thử nhanh bằng ví:** kích hoạt ví với một PIN, bấm nút nạp tiền, rồi nhập PIN để thanh toán. Để thử thất bại do thiếu tiền, đừng nạp đủ. Để thử khóa ví, nhập sai PIN 3 lần.
 
 ## 12. Kiểm thử
 
@@ -451,11 +530,21 @@ cd ../frontend
 npm run lint        # ESLint
 ```
 
+Phần thanh toán có 47 test trong `backend/src/payments/`:
+
+- `card-gateway.spec.ts`: Luhn, hạn thẻ, thương hiệu, từng thẻ thử nghiệm, OTP.
+- `payments.flow.spec.ts`: các luồng thanh toán đầy đủ (ví, thẻ, OTP, hết hạn, thử lại, hủy, hoàn tiền) chạy trên database giả trong bộ nhớ (`src/testing/fake-prisma.ts`). Sau mỗi test, mọi lần đổi trạng thái đơn đều được kiểm tra bằng `assertTransition` và cuối cùng phải phủ đủ 6 cạnh của sơ đồ (`PENDING→PAID`, `PENDING→PAYMENT_FAILED`, `PAYMENT_FAILED→PENDING`, `PENDING→CANCELLED`, `PAYMENT_FAILED→CANCELLED`, `PAID→CANCELLED`).
+
+Cần Node.js **24 trở lên** để chạy Jest với NestJS 12. Database giả không có khóa dòng nên không kiểm tra được trường hợp hai yêu cầu chạy song song, phần đó dựa vào các câu lệnh cập nhật có điều kiện trên PostgreSQL.
+
 ## 13. Hạn chế đã biết
 
-- Phần lớn API (giỏ hàng, tạo đơn, thanh toán) nhận `userId` từ request mà **chưa kiểm tra JWT**; chỉ `GET /orders/me` được bảo vệ. Cần thêm `JwtAuthGuard` trước khi triển khai thật.
-- Thanh toán là **mô phỏng**, chưa tích hợp cổng thanh toán thực.
-- Chưa có giao diện hoặc API quản trị (cập nhật trạng thái đơn, quản lý sản phẩm, nhập kho nguyên liệu).
+- Giỏ hàng và `POST /orders` vẫn nhận `userId` từ request mà **chưa kiểm tra JWT**. Các API thanh toán, ví, hủy đơn và lịch sử đơn đã bắt buộc JWT và kiểm tra chủ sở hữu đơn.
+- Thanh toán là **mô phỏng**, chưa tích hợp cổng thanh toán thực. OTP được hiển thị ngay trên giao diện thay vì gửi qua SMS.
+- Hoàn tiền về thẻ chỉ được ghi nhận trong dữ liệu giao dịch, không có giao dịch hoàn tiền thật.
+- Đơn thanh toán trực tuyến đã tạo nhưng khách không mở phiên thanh toán cũng không hủy vẫn giữ nguyên liệu cho đến khi khách thanh toán hoặc hủy đơn.
+- Hủy đơn đã thanh toán sẽ xóa dòng điểm thưởng của đơn đó (cột `order_id` của bảng điểm là duy nhất nên không thể ghi thêm dòng điểm âm).
+- Chưa có giao diện hoặc API quản trị (đưa đơn qua `PREPARING`, `READY`, `COMPLETED`, quản lý sản phẩm, nhập kho nguyên liệu).
 - Chưa có migration đầy đủ và script seed (xem mục 8).
 - Giá size và topping đang được khai báo cố định trong mã nguồn backend.
 - `JWT_EXPIRES_IN` trong `docker-compose.yml` chưa được dùng; thời hạn token cố định `1d` trong `auth.module.ts`.

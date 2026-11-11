@@ -21,6 +21,7 @@ model User {
   carts                carts?
   orders               orders[]
   loyalty_transactions loyalty_transactions[]
+  wallet               SimWallet?
 
   @@map("users")
 }
@@ -108,19 +109,38 @@ model products {
 }
 
 model payments {
-  id               Int      @id @default(autoincrement())
-  order_id         Int
-  idempotency_key  String   @unique @db.VarChar(255)
-  payment_method   String   @db.VarChar(30)
-  simulate_failure Boolean  @default(false)
-  status           String   @default("PROCESSING") @db.VarChar(30)
-  success          Boolean?
-  result           Json?
-  created_at       DateTime @default(now()) @db.Timestamp(6)
-  updated_at       DateTime @default(now()) @db.Timestamp(6)
+  id              Int     @id @default(autoincrement())
+  order_id        Int
+  idempotency_key String  @unique @db.VarChar(255)
+  payment_method  String  @db.VarChar(30)
+  amount          Decimal @default(0) @db.Decimal(12, 2)
 
-  orders orders @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payments_order")
+  // AWAITING_PAYMENT -> (AWAITING_OTP) -> SUCCESS | FAILED | EXPIRED | CANCELLED
+  // SUCCESS -> REFUNDED khi đơn đã thanh toán bị hủy.
+  status  String   @default("AWAITING_PAYMENT") @db.VarChar(30)
+  success Boolean?
 
+  // Mã giao dịch của cổng thanh toán mô phỏng (BLP...).
+  transaction_ref String?   @unique @db.VarChar(40)
+  expires_at      DateTime? @db.Timestamp(6)
+  attempts        Int       @default(0)
+  otp_expires_at  DateTime? @db.Timestamp(6)
+
+  // Chỉ lưu thương hiệu và 4 số cuối. Không bao giờ lưu số thẻ đầy đủ hay CVV.
+  card_brand String? @db.VarChar(20)
+  card_last4 String? @db.VarChar(4)
+
+  failure_code    String?  @db.VarChar(40)
+  failure_message String?  @db.VarChar(255)
+  result          Json?
+  created_at      DateTime @default(now()) @db.Timestamp(6)
+  updated_at      DateTime @default(now()) @db.Timestamp(6)
+
+  orders              orders              @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_payments_order")
+  wallet_transactions WalletTransaction[]
+
+  @@index([order_id, status])
+  @@index([status, expires_at])
   @@map("payments")
 }
 
@@ -211,6 +231,43 @@ model OrderIngredientReservation {
   @@unique([order_id, ingredient_id])
   @@index([ingredient_id, status])
   @@map("order_ingredient_reservations")
+}
+
+/// Ví điện tử mô phỏng (BrewPay). Số dư chỉ là số liệu thử nghiệm.
+model SimWallet {
+  id                  Int       @id @default(autoincrement())
+  user_id             Int       @unique
+  balance             Decimal   @default(0) @db.Decimal(12, 2)
+  pin_hash            String    @db.VarChar(255)
+  failed_pin_attempts Int       @default(0)
+  locked_until        DateTime? @db.Timestamp(6)
+  created_at          DateTime  @default(now()) @db.Timestamp(6)
+  updated_at          DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+
+  user         User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("sim_wallets")
+}
+
+/// Sổ giao dịch của ví: TOPUP (nạp), PAYMENT (thanh toán), REFUND (hoàn tiền).
+model WalletTransaction {
+  id            Int      @id @default(autoincrement())
+  wallet_id     Int
+  payment_id    Int?
+  type          String   @db.VarChar(20)
+  amount        Decimal  @db.Decimal(12, 2)
+  balance_after Decimal  @db.Decimal(12, 2)
+  description   String?  @db.VarChar(255)
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+
+  wallet  SimWallet @relation(fields: [wallet_id], references: [id], onDelete: Cascade)
+  payment payments? @relation(fields: [payment_id], references: [id], onDelete: SetNull)
+
+  // Mỗi giao dịch thanh toán chỉ có tối đa một dòng PAYMENT và một dòng REFUND.
+  @@unique([payment_id, type])
+  @@index([wallet_id, created_at])
+  @@map("wallet_transactions")
 }
 
 enum UserRole {
